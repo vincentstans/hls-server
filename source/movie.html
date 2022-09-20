@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <title>TITLE</title>
+<head>
+  <link href="https://vjs.zencdn.net/7.20.2/video-js.css" rel="stylesheet" />
+
+  <!-- If you'd like to support IE8 (for Video.js versions prior to v7) -->
+ <!-- <script src="https://vjs.zencdn.net/ie8/1.1.2/videojs-ie8.min.js"></script> -->
+</head>
+  <body>
+   <h1>TITLE</h1>
+<video-js id=vid_name width=1280 height=720 class="vjs-default-skin" controls>
+  <source
+     src="master.m3u8"
+     type="application/x-mpegURL">
+</video-js>
+   <!--This is for Video.js by itself -->
+   <script src="/js/video.js"></script>
+   <!--This is for HLS compatibility with all major browsers-->
+   <script src = "/js/stream.js"></script>
+   <script>
+       var player = videojs('vid_name');
+   </script>
+  </body>
+</html>
