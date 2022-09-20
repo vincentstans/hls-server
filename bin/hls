@@ -1,0 +1,125 @@
+#!/bin/bash
+#set -e
+# Resolution  WIDTH*1024/1535 = smaller size
+
+if [[ -z $1 ]]; then
+echo -ne "\tSupply a file to convert\n"
+exit 1
+else
+i="$1"
+t=$(echo ${i::-4}|rev|cut -d'/' -f1|rev)
+master="$t\/master"
+echo -ne "\tConverting $i to HLS Stream v1:[Original WxH] v2:[1280x720] v3:[640x360]\n"
+echo -ne "\tTitle: $t\n\tMaster M3U8: $master\n"
+sleep 0.5
+fi
+
+video() {
+echo -en "\n\tStarting\n"
+sz=$(ls -l "$i"|cut -d' ' -f5)
+#1 pv -s $sz -ptrbI "$i" | ffmpeg -i pipe:0 -v warning \
+#2 ffmpeg -i "$i" \
+
+pv -s $sz -ptrbI "$i" | ffmpeg -i pipe:0 \
+-filter_complex "[0:v]split=3[v1][v2][v3]; \
+[v1]copy[v1out]; \
+[v2]scale=w=1280:h=720[v2out]; \
+[v3]scale=w=640:h=360[v3out]" \
+-map [v1out] -c:v:0 h264_nvenc -x264-params "nal-hdr=cbr:force-crf=1" \
+-b:v:0 5M -maxrate:v:0 5M -minrate:v:0 5M -bufsize:v:0 10M -g 48 -sc_threshold 0 -keyint_min 48 \
+-map [v2out] -c:v:1 h264_nvenc -x264-params "nal-hdr=cbr:force-crf=1" \
+-b:v:1 3M -maxrate:v:1 3M -minrate:v:1 3M -bufsize:v:1 3M -g 48 -sc_threshold 0 -keyint_min 48 \
+-map [v3out] -c:v:2 h264_nvenc -x264-params "nal-hdr=cbr:force-crf=1" \
+-b:v:2 1M -maxrate:v:2 1M -minrate:v:2 1M -bufsize:v:2 1M -g 48 -sc_threshold 0 -keyint_min 48 \
+-map a:0 -c:a:0 copy \
+-map a:0 -c:a:1 aac -b:a:1 96k -ac 2 \
+-map a:0 -c:a:2 aac -b:a:2 48k -ac 2 \
+-f hls \
+-hls_time 10 \
+-hls_playlist_type vod \
+-hls_flags independent_segments \
+-hls_segment_type mpegts \
+-hls_segment_filename "$t"/v%v/segment%d.ts \
+-master_pl_name master.m3u8 \
+-var_stream_map "v:0,a:0 v:1,a:1 v:2,a:2" \
+"$t"/v%v/stream.m3u8 > /dev/null 2>&1
+
+echo -en "\n\tHLS Conversion Completed\n"
+ffmpeg -i $i -ss 00:00:01.000 -vframes 1 "$t"/thumb.png
+
+# create Movie HTML Website
+sed -e 's/TITLE/'"$t"'/' source/movie.html > "$t"/"$t".html
+# Update the index.html with the new conversion of movie.html
+index
+}
+
+index() {
+rm index.html
+echo -en "\n\n\tCreating index.html\n\n"
+header=$(cat <<- HEADER
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <title>My Movies</title>
+</head>
+  <body>
+   <h1>Movie List</h1>
+HEADER
+)
+
+footer=$(cat <<- FOOTER
+</body>
+</html>
+FOOTER
+)
+
+IFS=$(echo -en "\n\b")
+#f=($(find . -type f -name \*.html))
+f=($(ls */*.html))
+q=0
+url=()
+while [[ $q -lt ${#f[@]} ]]; do
+	if [[ ! ${f[$q]} =~ "source" ]]; then
+	   url+=(${f[$q]} )
+	fi
+((q++))
+done
+echo "$header" > index.html
+q=0
+while [[ $q -lt ${#url[@]} ]]; do
+mn=$(echo ${url[$q]}|cut -d'/' -f2)
+echo "<br><a href=\"${url[$q]}\">${mn::-4}</a>" >> index.html
+((q++))
+done
+echo "$footer" >> index.html
+exit 0
+
+}
+
+if [ ! -d "$t/v0" ]; then
+video "$t/$i"
+else
+read -n 1 -p "A stream exists. Overwrite? [Y/N] :" ow
+if [[ $ow =~ [y|Y] ]]; then
+echo
+rm -R "$t"/v{0..2}
+if [ -f "$t/master.m3u8" ];then rm "$t/master.m3u8";fi
+video
+fi
+echo -en "\n\n\tAborted\n"
+fi
+
+read -n 1 -p "Start a HTTP server?. [Y/N] :" ss
+echo
+if [[ $ss =~ [y|Y] ]]; then
+python3 -m http.server &
+# a password protected webserver below requires server.py
+#python3 server.py -u user -p password -b 0.0.0.0 8080 &
+echo "View your site at http://localhost:8000"
+else
+echo "Not starting WebServer"
+fi
+
+echo "Finished"
+exit 0
