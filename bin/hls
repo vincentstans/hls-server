@@ -3,7 +3,7 @@
 # Resolution  WIDTH*1024/1535 = smaller size
 
 if [[ -z $1 ]]; then
-echo -ne "\tSupply a file to convert\n"
+echo -ne "\tSupply a files to convert\n"
 exit 1
 else
 i="$1"
@@ -44,9 +44,9 @@ pv -s $sz -ptrbI "$i" | ffmpeg -i pipe:0 \
 -var_stream_map "v:0,a:0 v:1,a:1 v:2,a:2" \
 "$t"/v%v/stream.m3u8 > /dev/null 2>&1
 
-echo -en "\n\tHLS Conversion Completed\n"
-ffmpeg -i $i -ss 00:00:01.000 -vframes 1 "$t"/thumb.png
+ffmpeg -i "$i" -ss 00:00:03.000 -vframes 1 "$t"/thumb.png
 
+echo -en "\n\tHLS Conversion Completed\n"
 # create Movie HTML Website
 sed -e 's/TITLE/'"$t"'/' source/movie.html > "$t"/"$t".html
 # Update the index.html with the new conversion of movie.html
@@ -65,10 +65,12 @@ header=$(cat <<- HEADER
 </head>
   <body>
    <h1>Movie List</h1>
+   <table>
 HEADER
 )
 
 footer=$(cat <<- FOOTER
+	</table>
 </body>
 </html>
 FOOTER
@@ -87,13 +89,22 @@ while [[ $q -lt ${#f[@]} ]]; do
 done
 echo "$header" > index.html
 q=0
+d=0
 while [[ $q -lt ${#url[@]} ]]; do
 mn=$(echo ${url[$q]}|cut -d'/' -f2)
-echo "<br><a href=\"${url[$q]}\">${mn::-4}</a>" >> index.html
+if [ $d -eq 0 ] && [ ${#url[@]} -gt 3 ]; then
+echo "<tr>" >> index.html
+((d++))
+elif [ $d -eq 4 ]; then
+echo "</tr>" >> index.html
+d=0
+else
+((d++))
+fi
+echo "<br><td><div><a href=\"${url[$q]}\"><img src=\"${mn::-5}/thumb.png\" width=320 height=180><div>${mn::-4}</div></a></div><td>" >> index.html
 ((q++))
 done
 echo "$footer" >> index.html
-exit 0
 
 }
 
@@ -113,9 +124,8 @@ fi
 read -n 1 -p "Start a HTTP server?. [Y/N] :" ss
 echo
 if [[ $ss =~ [y|Y] ]]; then
-python3 -m http.server &
-# a password protected webserver below requires server.py
-#python3 server.py -u user -p password -b 0.0.0.0 8080 &
+python3 -m http.server
+#python3 server.py -u user -p pass -b 0.0.0.0 8080 &
 echo "View your site at http://localhost:8000"
 else
 echo "Not starting WebServer"
